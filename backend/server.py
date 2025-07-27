@@ -299,6 +299,153 @@ async def get_penalty_zone_status(player_id: str, session_id: str):
         "easter_egg": "🎮 This is harder than Dark Souls..." if remaining_minutes > 60 else "🏃‍♂️ Almost there! Don't give up!"
     }
 
+# Shadow Extraction System - The Signature Solo Leveling Ability!
+@api_router.post("/players/{player_id}/extract-shadow")
+async def extract_shadow(player_id: str, extraction: ShadowExtractionAttempt):
+    """Extract a shadow from a defeated enemy - Jin-Woo's unique power!"""
+    
+    player = await database.get_player(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Check mana cost
+    if player.mp < extraction.mana_cost:
+        return {
+            "success": False,
+            "message": "Insufficient MP for shadow extraction",
+            "easter_egg": "💀 'I need more mana...' - Every RPG player ever"
+        }
+    
+    # Calculate success based on player level and enemy
+    base_success_rate = extraction.success_rate
+    level_bonus = player.level * 0.02  # 2% per level
+    final_success_rate = min(0.95, base_success_rate + level_bonus)
+    
+    success = random.random() < final_success_rate
+    
+    if success:
+        # Create shadow based on enemy type
+        shadow_types = {
+            "Goblin": {"type": "Warrior", "rarity": ItemRarity.COMMON, "base_stats": 100},
+            "Hobgoblin": {"type": "Knight", "rarity": ItemRarity.RARE, "base_stats": 200},
+            "Ice Elf": {"type": "Archer", "rarity": ItemRarity.EPIC, "base_stats": 400},
+            "Demon Soldier": {"type": "Elite Warrior", "rarity": ItemRarity.LEGENDARY, "base_stats": 800},
+            "Dragon": {"type": "Ancient Beast", "rarity": ItemRarity.MYTHIC, "base_stats": 1500}
+        }
+        
+        enemy_data = shadow_types.get(extraction.enemy_name, shadow_types["Goblin"])
+        
+        # Create the shadow
+        shadow_data = ShadowCreate(
+            name=f"Shadow {extraction.enemy_name}",
+            type=enemy_data["type"],
+            rarity=enemy_data["rarity"],
+            stats={
+                "attack": enemy_data["base_stats"] + random.randint(-50, 50),
+                "defense": enemy_data["base_stats"] // 2 + random.randint(-25, 25),
+                "hp": enemy_data["base_stats"] * 5,
+                "mp": enemy_data["base_stats"] // 2
+            },
+            skills=[f"{extraction.enemy_name} Strike", "Shadow Form", "Loyalty"]
+        )
+        
+        shadow = await database.create_shadow(player_id, shadow_data)
+        
+        # Deduct mana
+        await database.update_player(player_id, PlayerUpdate(mp=player.mp - extraction.mana_cost))
+        
+        # Epic success messages with Easter eggs
+        success_messages = [
+            f"🌟 ARISE! {extraction.enemy_name} has joined your shadow army!",
+            f"⚡ The darkness bends to your will! Shadow {extraction.enemy_name} awakens!",
+            f"👑 'You shall serve me for eternity!' - Shadow {extraction.enemy_name} extracted!",
+            f"🔮 The power of the Shadow Monarch flows through you!",
+            f"💀 Death is not the end, but a new beginning as your shadow!"
+        ]
+        
+        return {
+            "success": True,
+            "message": random.choice(success_messages),
+            "shadow": shadow.dict(),
+            "easter_egg": "🎭 'Arise' is the coolest spell in any manhwa! 👑",
+            "army_count": len(await database.get_player_shadows(player_id)),
+            "special_effect": "Dark energy swirls around the fallen enemy as their shadow rises to serve you..."
+        }
+    else:
+        failure_messages = [
+            f"💔 Shadow extraction failed... {extraction.enemy_name}'s soul resists your call",
+            f"⚡ The shadow slips through your grasp like smoke...",
+            f"🌑 Not all souls can be claimed by the Shadow Monarch",
+            f"💨 The enemy's will is too strong to be bound as a shadow"
+        ]
+        
+        return {
+            "success": False,
+            "message": random.choice(failure_messages),
+            "easter_egg": "😢 Even Jin-Woo failed sometimes... Try again!",
+            "tip": "Higher level increases success rate. Keep grinding!"
+        }
+
+@api_router.get("/players/{player_id}/shadows", response_model=List[Shadow])
+async def get_player_shadows(player_id: str):
+    """Get all shadows in player's army"""
+    shadows = await database.get_player_shadows(player_id)
+    return shadows
+
+@api_router.put("/players/{player_id}/shadows/{shadow_id}/upgrade")
+async def upgrade_shadow(player_id: str, shadow_id: str):
+    """Upgrade a shadow soldier - Make them stronger!"""
+    
+    shadow = await database.get_shadow(shadow_id)
+    if not shadow or shadow.player_id != player_id:
+        raise HTTPException(status_code=404, detail="Shadow not found")
+    
+    # Upgrade logic
+    upgrade_cost = shadow.level * 1000
+    player = await database.get_player(player_id)
+    
+    if player.experience < upgrade_cost:
+        return {
+            "success": False,
+            "message": f"Need {upgrade_cost} XP to upgrade {shadow.name}",
+            "easter_egg": "💰 'Upgrading shadows ain't cheap!' - Jin-Woo probably"
+        }
+    
+    # Perform upgrade
+    new_level = shadow.level + 1
+    stat_increase = int(shadow.level * 0.1 * 100)  # 10% increase per level
+    
+    new_stats = {
+        "attack": shadow.stats["attack"] + stat_increase,
+        "defense": shadow.stats["defense"] + stat_increase // 2,
+        "hp": shadow.stats["hp"] + stat_increase * 2,
+        "mp": shadow.stats["mp"] + stat_increase // 2
+    }
+    
+    # Update shadow in database
+    await db.shadows.update_one(
+        {"id": shadow_id},
+        {"$set": {"level": new_level, "stats": new_stats}}
+    )
+    
+    # Deduct experience
+    await database.update_player(player_id, PlayerUpdate(experience=player.experience - upgrade_cost))
+    
+    upgrade_messages = [
+        f"⚡ {shadow.name} grows stronger! Level {new_level} achieved!",
+        f"🌟 Your shadow warrior evolves! New power level: {sum(new_stats.values())}",
+        f"👑 The Shadow Monarch's blessing enhances {shadow.name}!",
+        f"🔥 {shadow.name} has transcended their limits!"
+    ]
+    
+    return {
+        "success": True,
+        "message": random.choice(upgrade_messages),
+        "new_level": new_level,
+        "new_stats": new_stats,
+        "easter_egg": "📈 Numbers go up! Dopamine goes brrr! 🧠⚡"
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
