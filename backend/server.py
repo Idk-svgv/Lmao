@@ -914,6 +914,41 @@ async def get_funny_stats():
 # Include the router in the main app
 app.include_router(api_router)
 
+# CORS middleware for frontend communication
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Shutdown handler
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
+    logger.info("Database connection closed")
+
+# Root endpoint for testing
+@app.get("/")
+async def root():
+    return {
+        "message": "🌟 Solo Leveling RPG API - Welcome to the Shadow Realm! 👑",
+        "version": "2.0.0",
+        "easter_egg": "🎮 'This isn't even my final form!' - API Server probably",
+        "tip": "💡 Access the API documentation at /docs for all available endpoints!"
+    }
+
+# Include the router in the main app
+app.include_router(api_router)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
