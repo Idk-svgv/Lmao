@@ -446,6 +446,257 @@ async def upgrade_shadow(player_id: str, shadow_id: str):
         "easter_egg": "📈 Numbers go up! Dopamine goes brrr! 🧠⚡"
     }
 
+# Instant Dungeons - Personal Training Grounds!
+@api_router.get("/players/{player_id}/instant-dungeons")
+async def get_instant_dungeons(player_id: str):
+    """Get available instant dungeons for training"""
+    
+    player = await database.get_player(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Generate level-appropriate instant dungeons
+    instant_dungeons = [
+        {
+            "id": "training_grounds",
+            "name": "🏟️ Training Grounds",
+            "description": "Perfect for beginners. Weak goblins and slimes await.",
+            "min_level": 1,
+            "max_level": 10,
+            "entry_cost": 0,
+            "rewards": ["XP", "Basic Equipment", "Goblin Shadows"],
+            "easter_egg": "🎮 Tutorial dungeon - even your grandma could clear this!"
+        },
+        {
+            "id": "shadow_realm",
+            "name": "🌑 Shadow Realm",
+            "description": "Where shadows come to train. Mysterious and dangerous.",
+            "min_level": 15,
+            "max_level": 30,
+            "entry_cost": 100,
+            "rewards": ["Shadow Essence", "Dark Equipment", "Rare Shadows"],
+            "easter_egg": "👻 'Welcome to the shadow realm, Jimbo!' - Yu-Gi-Oh vibes"
+        },
+        {
+            "id": "monarchs_trial",
+            "name": "👑 Monarch's Trial",
+            "description": "The ultimate test. Only for those who dare to become kings.",
+            "min_level": 40,
+            "max_level": 50,
+            "entry_cost": 1000,
+            "rewards": ["Monarch Equipment", "Ancient Shadows", "Crown Fragments"],
+            "easter_egg": "🏆 'Heavy is the head that wears the crown...' 👑"
+        }
+    ]
+    
+    # Filter dungeons based on player level
+    available_dungeons = [
+        d for d in instant_dungeons 
+        if player.level >= d["min_level"]
+    ]
+    
+    return {
+        "available_dungeons": available_dungeons,
+        "player_level": player.level,
+        "recommendation": "Start with Training Grounds if you're new to instant dungeons!",
+        "pro_tip": "💡 Instant dungeons respawn infinitely - perfect for grinding!"
+    }
+
+@api_router.post("/players/{player_id}/instant-dungeons/{dungeon_id}/enter")
+async def enter_instant_dungeon(player_id: str, dungeon_id: str):
+    """Enter an instant dungeon for training"""
+    
+    player = await database.get_player(player_id)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    # Simulate dungeon encounter
+    combat_results = []
+    total_exp = 0
+    shadows_extracted = []
+    
+    # Different enemies based on dungeon
+    dungeon_enemies = {
+        "training_grounds": ["Goblin", "Slime", "Wolf"],
+        "shadow_realm": ["Shadow Goblin", "Dark Wraith", "Void Walker"],
+        "monarchs_trial": ["Elite Knight", "Ancient Dragon", "Demon Lord"]
+    }
+    
+    enemies = dungeon_enemies.get(dungeon_id, ["Goblin"])
+    num_encounters = random.randint(3, 7)
+    
+    for i in range(num_encounters):
+        enemy = random.choice(enemies)
+        
+        # Combat simulation
+        player_power = game_logic.calculate_combat_power(player, [])
+        enemy_power = random.randint(50, 200) * (player.level // 5 + 1)
+        
+        victory = player_power > enemy_power * 0.7  # 70% success threshold
+        
+        if victory:
+            exp_gained = random.randint(100, 300) * (player.level // 5 + 1)
+            total_exp += exp_gained
+            
+            # Chance for shadow extraction
+            if random.random() < 0.3:  # 30% chance
+                shadows_extracted.append(enemy)
+            
+            combat_results.append({
+                "encounter": i + 1,
+                "enemy": enemy,
+                "result": "Victory! ⚔️",
+                "exp_gained": exp_gained,
+                "shadow_available": enemy in shadows_extracted
+            })
+        else:
+            combat_results.append({
+                "encounter": i + 1,
+                "enemy": enemy,
+                "result": "Defeat... 💀",
+                "exp_gained": 0,
+                "shadow_available": False
+            })
+            break  # End dungeon on defeat
+    
+    # Level up player
+    if total_exp > 0:
+        level_info = await game_logic.level_up_player(player_id, total_exp)
+    
+    completion_messages = [
+        "🎉 Instant dungeon cleared! Your training pays off!",
+        "⚡ Victory! The Shadow Monarch's power grows!",
+        "🏆 Another successful training session!",
+        "💪 Jin-Woo would be proud of your progress!"
+    ]
+    
+    return {
+        "dungeon_cleared": len([r for r in combat_results if "Victory" in r["result"]]) > 0,
+        "encounters": combat_results,
+        "total_exp_gained": total_exp,
+        "shadows_available_for_extraction": shadows_extracted,
+        "level_up_info": level_info if total_exp > 0 else None,
+        "completion_message": random.choice(completion_messages),
+        "easter_egg": f"🎲 RNG was {'kind' if total_exp > 500 else 'cruel'} to you today!",
+        "next_tip": "Don't forget to extract those shadows! 👻"
+    }
+
+# Enhanced Story System with Rich Narrative
+@api_router.get("/players/{player_id}/story")
+async def get_player_story_progress(player_id: str):
+    """Get player's story progress with enhanced narrative"""
+    
+    chapters = await database.get_player_story_chapters(player_id)
+    
+    if not chapters:
+        # Initialize story chapters if they don't exist
+        story_chapters = get_story_chapters()
+        for i, chapter_data in enumerate(story_chapters):
+            chapter = StoryChapter(
+                chapter_number=chapter_data["chapter_number"],
+                title=chapter_data["title"],
+                description=chapter_data["description"],
+                content=chapter_data["content"],
+                unlocked=(i == 0),
+                player_id=player_id
+            )
+            await db.story_chapters.insert_one(chapter.dict())
+        
+        chapters = await database.get_player_story_chapters(player_id)
+    
+    # Add narrative enhancements
+    enhanced_chapters = []
+    for chapter in chapters:
+        enhanced_chapter = {
+            **chapter.dict(),
+            "reading_time": f"{len(chapter.content) * 2} minutes",
+            "difficulty": "📖 Narrative" if chapter.chapter_number <= 2 else "⚔️ Action-Packed",
+            "emotional_impact": random.choice(["😢 Heartbreaking", "😤 Intense", "😱 Shocking", "🔥 Epic", "😊 Inspiring"]),
+            "fan_rating": f"⭐ {random.uniform(4.5, 5.0):.1f}/5.0"
+        }
+        enhanced_chapters.append(enhanced_chapter)
+    
+    completed_count = len([c for c in chapters if c.completed])
+    
+    return {
+        "chapters": enhanced_chapters,
+        "progress": {
+            "completed": completed_count,
+            "total": len(chapters),
+            "percentage": int((completed_count / len(chapters)) * 100) if chapters else 0
+        },
+        "current_arc": "🌟 Shadow Monarch Awakening Arc",
+        "next_unlock": "Complete current chapter to unlock the next part of Jin-Woo's journey!",
+        "easter_egg": "📚 'This is better than most anime!' - Every Solo Leveling fan",
+        "fun_fact": "💡 Did you know? The Double Dungeon incident changed everything in the Solo Leveling universe!"
+    }
+
+@api_router.get("/story/chapters/{chapter_number}")
+async def get_story_chapter_content(chapter_number: int):
+    """Get rich story chapter content with enhanced narrative"""
+    
+    chapter_data = get_chapter_by_number(chapter_number)
+    if not chapter_data:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    
+    # Enhance the story content with narrative elements
+    enhanced_content = []
+    
+    for content_piece in chapter_data["content"]:
+        enhanced_piece = {**content_piece}
+        
+        # Add atmospheric descriptions
+        if content_piece["type"] == "narrative":
+            enhanced_piece["atmosphere"] = random.choice([
+                "🌙 Dark and mysterious",
+                "⚡ Tense and electrifying", 
+                "🌟 Awe-inspiring",
+                "💀 Ominous and foreboding",
+                "🔥 Intense and dramatic"
+            ])
+            enhanced_piece["background_music"] = random.choice([
+                "🎵 Epic orchestral theme",
+                "🎶 Mysterious ambient sounds",
+                "🎼 Intense battle music",
+                "🎸 Emotional piano melody"
+            ])
+        
+        # Add choice consequences preview
+        if content_piece["type"] == "choice":
+            for option in enhanced_piece["options"]:
+                option["preview"] = f"This choice will affect your character development..."
+                option["popularity"] = f"{random.randint(15, 45)}% of players chose this"
+        
+        enhanced_content.append(enhanced_piece)
+    
+    # Add chapter metadata
+    chapter_meta = {
+        "word_count": sum(len(c.get("text", "")) for c in chapter_data["content"]),
+        "estimated_reading_time": f"{len(chapter_data['content']) * 3} minutes",
+        "themes": ["Power", "Growth", "Determination", "Friendship", "Sacrifice"],
+        "easter_eggs_count": random.randint(2, 5),
+        "fan_favorite_moment": "The moment when Jin-Woo first hears 'The System has awakened'",
+        "trivia": "🤓 This chapter is based on the early manhwa chapters where everything changed for Jin-Woo!"
+    }
+    
+    return {
+        "chapter": {
+            **chapter_data,
+            "content": enhanced_content,
+            "metadata": chapter_meta
+        },
+        "navigation": {
+            "previous_chapter": chapter_number - 1 if chapter_number > 1 else None,
+            "next_chapter": chapter_number + 1 if chapter_number < 6 else None
+        },
+        "reader_engagement": {
+            "likes": random.randint(5000, 15000),
+            "comments": random.randint(200, 800),
+            "shares": random.randint(50, 200)
+        },
+        "easter_egg": "🎭 'The weakest hunter becomes the strongest' - Classic shounen vibes! 💪"
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
