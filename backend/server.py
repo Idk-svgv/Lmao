@@ -697,6 +697,220 @@ async def get_story_chapter_content(chapter_number: int):
         "easter_egg": "🎭 'The weakest hunter becomes the strongest' - Classic shounen vibes! 💪"
     }
 
+# Equipment Enhancement System - Upgrade Your Gear!
+@api_router.get("/players/{player_id}/equipment", response_model=List[Equipment])
+async def get_player_equipment(player_id: str):
+    """Get all player equipment with enhancement info"""
+    equipment = await database.get_player_equipment(player_id)
+    
+    # Add enhancement info to each item
+    enhanced_equipment = []
+    for item in equipment:
+        item_dict = item.dict()
+        item_dict["enhancement_level"] = getattr(item, "enhancement_level", 0)
+        item_dict["max_enhancement"] = 10
+        item_dict["enhancement_cost"] = (item_dict["enhancement_level"] + 1) * 1000
+        item_dict["success_rate"] = max(10, 100 - (item_dict["enhancement_level"] * 10))
+        enhanced_equipment.append(item_dict)
+    
+    return enhanced_equipment
+
+@api_router.post("/players/{player_id}/equipment/{item_id}/enhance")
+async def enhance_equipment(player_id: str, item_id: str):
+    """Enhance equipment - Risk vs Reward!"""
+    
+    # Get equipment
+    equipment_list = await database.get_player_equipment(player_id)
+    item = next((e for e in equipment_list if e.id == item_id), None)
+    
+    if not item:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+    
+    enhancement_level = getattr(item, "enhancement_level", 0)
+    
+    if enhancement_level >= 10:
+        return {
+            "success": False,
+            "message": "Equipment is already at maximum enhancement level!",
+            "easter_egg": "✨ This gear is perfect! No more upgrades needed! 🌟"
+        }
+    
+    # Calculate costs and success rate
+    enhancement_cost = (enhancement_level + 1) * 1000
+    success_rate = max(10, 100 - (enhancement_level * 10))
+    
+    player = await database.get_player(player_id)
+    if player.experience < enhancement_cost:
+        return {
+            "success": False,
+            "message": f"Need {enhancement_cost} XP to enhance this item",
+            "easter_egg": "💸 'Enhancement is expensive!' - Every MMO player ever"
+        }
+    
+    # Roll for success
+    success = random.randint(1, 100) <= success_rate
+    
+    if success:
+        # Successful enhancement
+        new_level = enhancement_level + 1
+        stat_boost = int((item.attack or item.defense or 10) * 0.15)  # 15% boost
+        
+        # Update item stats
+        update_data = {"enhancement_level": new_level}
+        if item.attack:
+            update_data["attack"] = item.attack + stat_boost
+        if item.defense:
+            update_data["defense"] = item.defense + stat_boost
+        
+        await db.equipment.update_one(
+            {"id": item_id},
+            {"$set": update_data}
+        )
+        
+        # Deduct experience
+        await database.update_player(player_id, PlayerUpdate(experience=player.experience - enhancement_cost))
+        
+        success_messages = [
+            f"✨ SUCCESS! {item.name} is now +{new_level}!",
+            f"🌟 Enhancement successful! Your gear shines with new power!",
+            f"⚡ {item.name} has been blessed by the Enhancement Gods!",
+            f"🔥 Upgrade complete! Power level increased!"
+        ]
+        
+        return {
+            "success": True,
+            "message": random.choice(success_messages),
+            "new_enhancement_level": new_level,
+            "stat_increase": stat_boost,
+            "easter_egg": "🎉 'ENHANCEMENT SUCCESS!' *satisfying ding sound* 🔔",
+            "sparkle_effect": "✨✨✨ Your equipment glows with enhanced power! ✨✨✨"
+        }
+    else:
+        # Failed enhancement
+        failure_messages = [
+            f"💥 FAILURE! {item.name} enhancement failed!",
+            f"😢 The enhancement gods were not kind today...",
+            f"💔 So close! Better luck next time!",
+            f"⚡ The power was too much for {item.name} to handle!"
+        ]
+        
+        # In some games, failure downgrades or destroys items
+        # Let's be nice and just consume resources
+        await database.update_player(player_id, PlayerUpdate(experience=player.experience - enhancement_cost))
+        
+        return {
+            "success": False,
+            "message": random.choice(failure_messages),
+            "consolation": "Don't worry! You didn't lose the item - that would be too cruel! 😅",
+            "easter_egg": "💸 'My precious XP...' - Gollum voice",
+            "encouragement": "🌟 Failure is just practice for success! Try again!"
+        }
+
+# Combat System for Dungeons
+@api_router.post("/players/{player_id}/dungeons/{dungeon_id}/combat")
+async def dungeon_combat(player_id: str, dungeon_id: str):
+    """Engage in dungeon combat with enhanced battle system"""
+    
+    player = await database.get_player(player_id)
+    dungeon = await database.get_dungeon(dungeon_id)
+    
+    if not player or not dungeon:
+        raise HTTPException(status_code=404, detail="Player or dungeon not found")
+    
+    # Simulate epic combat
+    combat_result = game_logic.simulate_dungeon_combat(player, dungeon)
+    
+    # Enhanced combat messages
+    if combat_result["success"]:
+        victory_messages = [
+            f"🏆 VICTORY! You conquered the {dungeon.name}!",
+            f"⚔️ The monsters fall before your might!",
+            f"👑 Another dungeon bows to the Shadow Monarch!",
+            f"🌟 Flawless Victory! Jin-Woo would be proud!"
+        ]
+        
+        # Create dungeon attempt record
+        attempt = await database.create_dungeon_attempt(player_id, dungeon_id)
+        await db.dungeon_attempts.update_one(
+            {"id": attempt.id},
+            {"$set": {
+                "cleared": True,
+                "clear_time": combat_result["clear_time"],
+                "rewards_gained": combat_result.get("equipment_drop", [])
+            }}
+        )
+        
+        # Award experience
+        await game_logic.level_up_player(player_id, combat_result["exp_gained"])
+        
+        result = {
+            "success": True,
+            "message": random.choice(victory_messages),
+            "exp_gained": combat_result["exp_gained"],
+            "clear_time": f"{combat_result['clear_time'] // 60}m {combat_result['clear_time'] % 60}s",
+            "equipment_dropped": combat_result.get("equipment_drop"),
+            "easter_egg": "🎮 'GG EZ' - You, probably 😎",
+            "battle_cry": "FOR THE SHADOW ARMY! ⚡👥⚡"
+        }
+        
+        # Add loot if equipment dropped
+        if combat_result.get("equipment_drop"):
+            result["loot_message"] = "💎 Rare equipment obtained! Check your inventory!"
+        
+        return result
+    else:
+        defeat_messages = [
+            f"💀 Defeat... The {dungeon.name} proved too challenging",
+            f"😞 Not today... Retreat and grow stronger!",
+            f"⚡ The dungeon's power overwhelmed you",
+            f"🌙 Even shadows must retreat sometimes..."
+        ]
+        
+        return {
+            "success": False,
+            "message": random.choice(defeat_messages),
+            "damage_taken": combat_result["damage_taken"],
+            "consolation_exp": combat_result["exp_gained"],
+            "easter_egg": "💪 'What doesn't kill you makes you stronger!' - Friedrich Nietzsche",
+            "encouragement": "🌟 Every defeat is a lesson! Train harder and try again!",
+            "tip": "💡 Consider upgrading your equipment or leveling up before retrying"
+        }
+
+# Fun Easter Eggs and Secret Endpoints
+@api_router.get("/easter-eggs/jin-woo-quotes")
+async def get_jin_woo_quotes():
+    """Secret endpoint with Jin-Woo's iconic quotes"""
+    quotes = [
+        "🗣️ 'The strong do whatever they want, and the weak just grit their teeth and accept it.'",
+        "⚡ 'Arise.'",
+        "👑 'I am the Shadow Monarch.'",
+        "🌟 'I'll prove that even the weakest person can become strong.'",
+        "🔥 'Those who have the power should be responsible for those who don't.'",
+        "💀 'Death is not the end. It's the beginning of a new adventure.'",
+        "⚔️ 'I don't run from my enemies. They run from me.'",
+        "🌙 'In the deepest darkness, shadows are born.'"
+    ]
+    
+    return {
+        "quote": random.choice(quotes),
+        "easter_egg": "🎭 Jin-Woo was basically the Batman of the hunter world! 🦇",
+        "fun_fact": "💡 These quotes gave millions of fans goosebumps!",
+        "author_note": "📚 Chugong really knew how to write epic dialogue!"
+    }
+
+@api_router.get("/easter-eggs/stats")
+async def get_funny_stats():
+    """Fun statistics about the game"""
+    return {
+        "total_shadows_extracted": random.randint(50000, 100000),
+        "daily_quests_failed": random.randint(5000, 15000),
+        "penalty_zone_survivors": random.randint(500, 2000),
+        "equipment_enhancement_failures": random.randint(20000, 50000),
+        "jin_woo_simps": "∞ (Everyone)",
+        "easter_egg": "📊 'Statistics are like a bikini. What they reveal is suggestive, but what they conceal is vital.' - Aaron Levenstein",
+        "hidden_truth": "🤫 The real treasure was the shadows we extracted along the way!"
+    }
+
 # Include the router in the main app
 app.include_router(api_router)
 
