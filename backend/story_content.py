@@ -475,5 +475,4 @@ def get_chapter_by_number(chapter_number: int) -> Dict[str, Any]:
 
 def get_total_chapters() -> int:
     """Get the total number of available chapters"""
-    return len(get_story_chapters())</content>
-    </file>
+    return len(get_story_chapters())
