@@ -1,6 +1,6 @@
 <file>
       <absolute_file_name>/app/backend/story_content.py</absolute_file_name>
-      <content"># Solo Leveling Story Content
+      <content># Solo Leveling Story Content
 from typing import List, Dict, Any
 
 def get_story_chapters() -> List[Dict[str, Any]]:
